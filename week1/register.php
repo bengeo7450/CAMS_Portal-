@@ -1,50 +1,62 @@
 <?php
-/**
- * File: register.php
- * Module: User Account Registration & Role Assignment
- * Author: Ben George
- */
 session_start();
-require_once dirname(__DIR__) . '/db.php';
+
+// Redirect if already logged in based on role
+if (isset($_SESSION['user_id'])) {
+    if ($_SESSION['role'] === 'admin') {
+        header("Location: ../week2/admin_dashboard.php");
+    } else {
+        header("Location: booking.php");
+    }
+    exit();
+}
 
 $error = '';
 $success = '';
 
-// Password complexity validation function
-function validatePasswordComplexity($password) {
-    // Requires: Min 8 chars, 1 uppercase, 1 lowercase, 1 number, 1 special character
-    return preg_match('/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/', $password);
-}
-
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $full_name = trim($_POST['full_name'] ?? '');
-    $username  = trim($_POST['username'] ?? '');
-    $password  = $_POST['password'] ?? '';
-    $role      = $_POST['role'] ?? 'client';
+    $name     = trim($_POST['name'] ?? '');
+    $email    = trim($_POST['email'] ?? '');
+    $password = $_POST['password'] ?? '';
+    $role     = $_POST['role'] ?? 'client';
 
-    if (empty($full_name) || empty($username) || empty($password)) {
-        $error = "All fields are required.";
-    } elseif (!validatePasswordComplexity($password)) {
-        $error = "Password does not meet complexity requirements.";
+    if (empty($name) || empty($email) || empty($password)) {
+        $error = "Please fill in all required fields.";
+    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $error = "Please enter a valid email address.";
     } else {
-        // Check for existing user
-        $stmt = $pdo->prepare("SELECT id FROM users WHERE username = :username");
-        $stmt->execute([':username' => $username]);
-        
-        if ($stmt->fetch()) {
-            $error = "Username is already taken.";
-        } else {
-            // Hash password and save account
-            $hashedPassword = password_hash($password, PASSWORD_BCRYPT);
-            $insertStmt = $pdo->prepare("INSERT INTO users (full_name, username, password, role) VALUES (:name, :user, :pass, :role)");
-            $insertStmt->execute([
-                ':name' => $full_name,
-                ':user' => $username,
-                ':pass' => $hashedPassword,
-                ':role' => $role
+        $host = 'localhost';
+        $dbname = 'cams_db';
+        $db_user = 'root';
+        $db_pass = '';
+
+        try {
+            $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8", $db_user, $db_pass, [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
             ]);
 
-            $success = "Account created successfully! You can now log in.";
+            // Check if email already exists
+            $stmt = $pdo->prepare("SELECT id FROM users WHERE email = :email");
+            $stmt->execute(['email' => $email]);
+
+            if ($stmt->fetch()) {
+                $error = "An account with this email address already exists.";
+            } else {
+                $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
+
+                $insertStmt = $pdo->prepare("INSERT INTO users (name, email, password, role) VALUES (:name, :email, :password, :role)");
+                $insertStmt->execute([
+                    'name'     => $name,
+                    'email'    => $email,
+                    'password' => $hashedPassword,
+                    'role'     => $role
+                ]);
+
+                $success = "Registration successful! You can now log in.";
+            }
+        } catch (PDOException $e) {
+            $error = "Database error: " . $e->getMessage();
         }
     }
 }
@@ -53,76 +65,69 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Register Account - CAMS Portal</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CAMS Portal - Register</title>
     <style>
-        body { font-family: Arial, sans-serif; background: #f4f6f9; padding: 40px; }
-        .card { max-width: 450px; margin: 0 auto; background: #fff; padding: 25px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        .form-group { margin-bottom: 15px; }
-        label { display: block; margin-bottom: 5px; font-weight: bold; }
-        input[type="text"], input[type="password"], select { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
-        button { width: 100%; padding: 10px; background: #007bff; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; }
-        .alert-error { color: #dc3545; background: #f8d7da; padding: 10px; border-radius: 4px; margin-bottom: 15px; }
-        .alert-success { color: #155724; background: #d4edda; padding: 10px; border-radius: 4px; margin-bottom: 15px; }
-        .password-rules { background: #e9ecef; border-left: 4px solid #007bff; padding: 10px; margin-bottom: 15px; font-size: 0.85em; border-radius: 0 4px 4px 0; }
-        .password-rules ul { margin: 5px 0 0 18px; padding: 0; }
+        * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { background-color: #f0f2f5; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
+        .register-card { background: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); width: 100%; max-width: 400px; }
+        .register-card h2 { margin-top: 0; margin-bottom: 20px; text-align: center; color: #1c1e21; }
+        .error-msg { color: #dc3545; font-size: 14px; margin-bottom: 15px; }
+        .success-msg { color: #198754; font-size: 14px; margin-bottom: 15px; }
+        .form-group { margin-bottom: 18px; }
+        .form-group label { display: block; margin-bottom: 6px; font-weight: 600; font-size: 14px; color: #1c1e21; }
+        .form-group input, .form-group select { width: 100%; padding: 10px; border: 1px solid #cccccc; border-radius: 4px; font-size: 14px; }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: #0066ff; }
+        .btn-submit { width: 100%; padding: 10px; background-color: #0066ff; border: none; border-radius: 4px; color: white; font-size: 15px; font-weight: 600; cursor: pointer; }
+        .btn-submit:hover { background-color: #0052cc; }
+        .login-link { margin-top: 20px; text-align: center; font-size: 14px; color: #606770; }
+        .login-link a { color: #0066ff; text-decoration: none; font-weight: 600; }
+        .login-link a:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
 
-<div class="card">
-    <h2>Create an Account</h2>
+<div class="register-card">
+    <h2>Create CAMS Account</h2>
 
-    <?php if ($error): ?>
-        <div class="alert-error"><?php echo htmlspecialchars($error); ?></div>
+    <?php if (!empty($error)): ?>
+        <div class="error-msg"><?php echo htmlspecialchars($error); ?></div>
     <?php endif; ?>
 
-    <?php if ($success): ?>
-        <div class="alert-success">
-            <?php echo htmlspecialchars($success); ?><br><br>
-            <a href="login.php" style="color: #155724; font-weight: bold;">Click here to Login</a>
+    <?php if (!empty($success)): ?>
+        <div class="success-msg"><?php echo htmlspecialchars($success); ?></div>
+    <?php endif; ?>
+
+    <form action="register.php" method="POST">
+        <div class="form-group">
+            <label for="name">Full Name</label>
+            <input type="text" id="name" name="name" required placeholder="John Doe">
         </div>
-    <?php else: ?>
-        <form action="register.php" method="POST">
-            <div class="form-group">
-                <label>Full Name</label>
-                <input type="text" name="full_name" required>
-            </div>
 
-            <div class="form-group">
-                <label>Username</label>
-                <input type="text" name="username" required>
-            </div>
+        <div class="form-group">
+            <label for="email">Email Address</label>
+            <input type="email" id="email" name="email" required placeholder="name@example.com">
+        </div>
 
-            <div class="form-group">
-                <label>Account Role</label>
-                <select name="role">
-                    <option value="client">Client</option>
-                    <option value="admin">Administrator</option>
-                </select>
-            </div>
+        <div class="form-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" required>
+        </div>
 
-            <!-- Displayed Password Complexity Rules -->
-            <div class="password-rules">
-                <strong>Password Requirements:</strong>
-                <ul>
-                    <li>At least 8 characters long</li>
-                    <li>At least one uppercase letter (A-Z)</li>
-                    <li>At least one lowercase letter (a-z)</li>
-                    <li>At least one number (0-9)</li>
-                    <li>At least one special character (@$!%*?&)</li>
-                </ul>
-            </div>
+        <div class="form-group">
+            <label for="role">Account Type</label>
+            <select id="role" name="role">
+                <option value="client">Client</option>
+                <option value="admin">Admin</option>
+            </select>
+        </div>
 
-            <div class="form-group">
-                <label>Password</label>
-                <input type="password" name="password" required>
-            </div>
+        <button type="submit" class="btn-submit">Register</button>
+    </form>
 
-            <button type="submit">Register Account</button>
-        </form>
-    <?php endif; ?>
-
-    <p style="margin-top: 15px; text-align: center;"><a href="login.php">Already have an account? Login</a></p>
+    <div class="login-link">
+        <p>Already have an account? <a href="login.php">Log in here</a></p>
+    </div>
 </div>
 
 </body>
