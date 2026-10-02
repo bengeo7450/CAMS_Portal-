@@ -78,7 +78,7 @@ The project runs on a MySQL database (`cams_db`) with two main linked tables:
 
 1. Clone this repo into your local web folder (e.g., `htdocs` in XAMPP):
 ```bash
-git clone [https://github.com/bengeo7450/SDC480-Project.git](https://github.com/bengeo7450/SDC480-Project.git)
+git clone [https://github.com/bengeo7450/CAMS_Portal-.git](https://github.com/bengeo7450/SDC480-Project.git)
 
 ```
 
